@@ -1,4 +1,4 @@
-package main
+package sshutil
 
 import (
 	"fmt"
@@ -12,15 +12,13 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
-func sshConnect(addr, user, keyPath string) (*ssh.Client, error) {
+func Connect(addr, user, keyPath string) (*ssh.Client, error) {
 	var authMethods []ssh.AuthMethod
 
-	// Try SSH agent first
 	if am, err := agentAuthMethod(); err == nil {
 		authMethods = append(authMethods, am)
 	}
 
-	// Add key file auth if provided
 	if keyPath != "" {
 		if am, err := loadKey(keyPath); err == nil {
 			authMethods = append(authMethods, am)
@@ -33,7 +31,7 @@ func sshConnect(addr, user, keyPath string) (*ssh.Client, error) {
 		return nil, fmt.Errorf("no auth methods available (no SSH agent and no key provided)")
 	}
 
-	hostKeyCallback, err := hostKeyCallback()
+	hostKeyCb, err := hostKeyCallback()
 	if err != nil {
 		return nil, fmt.Errorf("host key verification setup: %w", err)
 	}
@@ -41,7 +39,7 @@ func sshConnect(addr, user, keyPath string) (*ssh.Client, error) {
 	config := &ssh.ClientConfig{
 		User:            user,
 		Auth:            authMethods,
-		HostKeyCallback: hostKeyCallback,
+		HostKeyCallback: hostKeyCb,
 		Timeout:         10 * time.Second,
 	}
 

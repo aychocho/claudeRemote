@@ -5,18 +5,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"claude-remote/internal/provision"
+	"claude-remote/internal/sshutil"
+	"claude-remote/internal/terminal"
 )
 
 var version = "dev"
-
-type config struct {
-	user      string
-	host      string
-	port      string
-	keyPath   string
-	credsPath string
-	apiKey    string
-}
 
 func main() {
 	keyPath := flag.String("i", "", "SSH private key path")
@@ -56,19 +51,10 @@ func main() {
 		*credsPath = home + "/.claude/.credentials.json"
 	}
 
-	cfg := config{
-		user:      user,
-		host:      host,
-		port:      *port,
-		keyPath:   *keyPath,
-		credsPath: *credsPath,
-		apiKey:    *apiKey,
-	}
+	addr := host + ":" + *port
+	fmt.Fprintf(os.Stderr, "Connecting to %s@%s:%s...\n", user, host, *port)
 
-	addr := cfg.host + ":" + cfg.port
-	fmt.Fprintf(os.Stderr, "Connecting to %s@%s:%s...\n", cfg.user, cfg.host, cfg.port)
-
-	client, err := sshConnect(addr, cfg.user, cfg.keyPath)
+	client, err := sshutil.Connect(addr, user, *keyPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "SSH connection failed: %v\n", err)
 		os.Exit(1)
@@ -77,17 +63,17 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "Connected.\n")
 
-	if err := provision(client, cfg); err != nil {
+	if err := provision.Run(client, *credsPath, *apiKey); err != nil {
 		fmt.Fprintf(os.Stderr, "Provisioning failed: %v\n", err)
 		os.Exit(1)
 	}
 
 	var env map[string]string
-	if cfg.apiKey != "" {
-		env = map[string]string{"ANTHROPIC_API_KEY": cfg.apiKey}
+	if *apiKey != "" {
+		env = map[string]string{"ANTHROPIC_API_KEY": *apiKey}
 	}
 
-	if err := interactiveSession(client, "claude", env); err != nil {
+	if err := terminal.InteractiveSession(client, "claude", env); err != nil {
 		fmt.Fprintf(os.Stderr, "Session error: %v\n", err)
 		os.Exit(1)
 	}

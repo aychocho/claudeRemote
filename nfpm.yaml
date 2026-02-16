@@ -1,0 +1,9 @@
+name: claudeRemote
+arch: ${ARCH}
+version: ${VERSION}
+maintainer: aycho
+description: SSH into a remote machine and launch Claude Code
+license: MIT
+contents:
+  - src: claudeRemote
+    dst: /usr/local/bin/claudeRemote

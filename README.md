@@ -11,15 +11,47 @@ SSH into a remote machine and launch [Claude Code](https://claude.ai/claude-code
 
 ## Install
 
+### From .deb (Debian/Ubuntu)
+
+Download the `.deb` and `checksums.txt` from the [releases page](../../releases/latest), then:
+
 ```bash
-go install -ldflags "-s -w" .
+# verify the checksum
+sha256sum -c checksums.txt
+
+# install
+sudo dpkg -i claudeRemote_*.deb
 ```
 
-Or with `make`:
+This places the binary at `/usr/local/bin/claudeRemote`.
+
+To uninstall:
 
 ```bash
-make build    # builds ./claudeRemote
-make install  # installs to $GOPATH/bin
+sudo dpkg -r claudeRemote
+```
+
+### Build from source
+
+Requires Go 1.21+.
+
+```bash
+git clone <repo-url> && cd claude-remote
+
+# option 1: build a local binary
+make build        # produces ./claudeRemote
+
+# option 2: install to $GOPATH/bin
+make install
+```
+
+### Build the .deb yourself
+
+Requires [nfpm](https://nfpm.goreleaser.com/install/).
+
+```bash
+make deb          # produces claudeRemote_<version>_<arch>.deb
+make checksums    # produces checksums.txt
 ```
 
 ## Usage
