@@ -33,25 +33,22 @@ sudo dpkg -r claudeRemote
 
 ### Build from source
 
-Requires Go 1.21+.
+Requires Go 1.24+.
 
 ```bash
-git clone <repo-url> && cd claude-remote
-
-# option 1: build a local binary
-make build        # produces ./claudeRemote
-
-# option 2: install to $GOPATH/bin
-make install
+git clone https://github.com/aychocho/claudeRemote.git && cd claudeRemote
+make build
+sudo mv claudeRemote /usr/local/bin/
 ```
 
 ### Build the .deb yourself
 
-Requires [nfpm](https://nfpm.goreleaser.com/install/).
+Requires Go 1.24+ and [nfpm](https://nfpm.goreleaser.com/install/).
 
 ```bash
-make deb          # produces claudeRemote_<version>_<arch>.deb
-make checksums    # produces checksums.txt
+git clone https://github.com/aychocho/claudeRemote.git && cd claudeRemote
+make deb
+sudo dpkg -i claudeRemote_*.deb
 ```
 
 ## Usage
@@ -93,7 +90,6 @@ claudeRemote -k sk-ant-... user@host
 
 ## Requirements
 
-- Go 1.21+
 - SSH access to the target machine
 - Claude credentials or API key
 
