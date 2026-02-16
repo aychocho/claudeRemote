@@ -13,17 +13,19 @@ SSH into a remote machine and launch [Claude Code](https://claude.ai/claude-code
 
 ### From .deb (Debian/Ubuntu)
 
-Download the `.deb` and `checksums.txt` from the [releases page](../../releases/latest), then:
+**amd64:**
 
 ```bash
-# verify the checksum
-sha256sum -c checksums.txt
-
-# install
-sudo dpkg -i claudeRemote_*.deb
+curl -fsSLO "$(curl -fsSL https://api.github.com/repos/aychocho/claudeRemote/releases/latest | grep -oP 'https://[^"]*amd64\.deb')"
+sudo dpkg -i claudeRemote_*_amd64.deb
 ```
 
-This places the binary at `/usr/local/bin/claudeRemote`.
+**arm64:**
+
+```bash
+curl -fsSLO "$(curl -fsSL https://api.github.com/repos/aychocho/claudeRemote/releases/latest | grep -oP 'https://[^"]*arm64\.deb')"
+sudo dpkg -i claudeRemote_*_arm64.deb
+```
 
 To uninstall:
 
