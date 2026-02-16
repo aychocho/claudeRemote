@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"regexp"
 	"syscall"
 
 	"claude-remote/internal/sshutil"
@@ -13,6 +14,8 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 )
+
+var validEnvKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func InteractiveSession(client *ssh.Client, command string, env map[string]string) error {
 	session, err := client.NewSession()
@@ -22,9 +25,11 @@ func InteractiveSession(client *ssh.Client, command string, env map[string]strin
 	defer session.Close()
 
 	for k, v := range env {
+		if !validEnvKey.MatchString(k) {
+			return fmt.Errorf("invalid environment variable name: %q", k)
+		}
 		if err := session.Setenv(k, v); err != nil {
 			command = fmt.Sprintf("export %s=%s; %s", k, sshutil.ShellQuote(v), command)
-			break
 		}
 	}
 

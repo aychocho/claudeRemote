@@ -1,6 +1,7 @@
 package sshutil
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -85,8 +86,7 @@ func hostKeyCallback() (ssh.HostKeyCallback, error) {
 
 	knownHostsFile := filepath.Join(home, ".ssh", "known_hosts")
 	if _, err := os.Stat(knownHostsFile); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %s not found, accepting all host keys\n", knownHostsFile)
-		return ssh.InsecureIgnoreHostKey(), nil
+		return nil, fmt.Errorf("%s not found — run 'ssh-keyscan <host> >> %s' to add the host key first", knownHostsFile, knownHostsFile)
 	}
 
 	return knownhosts.New(knownHostsFile)
@@ -115,7 +115,8 @@ func loadKey(path string) (ssh.AuthMethod, error) {
 
 	signer, err := ssh.ParsePrivateKey(data)
 	if err != nil {
-		if err.Error() == "ssh: this private key is passphrase protected" {
+		var missingErr *ssh.PassphraseMissingError
+		if errors.As(err, &missingErr) {
 			fmt.Fprintf(os.Stderr, "Enter passphrase for key %s: ", path)
 			passphrase, readErr := term.ReadPassword(int(os.Stdin.Fd()))
 			fmt.Fprintln(os.Stderr)

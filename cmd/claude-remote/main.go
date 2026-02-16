@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"claude-remote/internal/provision"
@@ -32,6 +33,12 @@ func main() {
 
 	if flag.NArg() != 1 {
 		flag.Usage()
+		os.Exit(1)
+	}
+
+	portNum, err := strconv.Atoi(*port)
+	if err != nil || portNum < 1 || portNum > 65535 {
+		fmt.Fprintf(os.Stderr, "Error: invalid port %q\n", *port)
 		os.Exit(1)
 	}
 
@@ -79,7 +86,7 @@ func main() {
 		env = map[string]string{"ANTHROPIC_API_KEY": *apiKey}
 	}
 
-	sessionErr := terminal.InteractiveSession(client, claudePath, env)
+	sessionErr := terminal.InteractiveSession(client, sshutil.ShellQuote(claudePath), env)
 
 	fmt.Fprintf(os.Stderr, "Cleaning up remote ~/.claude...\n")
 	if _, err := sshutil.RunCmd(client, "rm -rf \"$HOME/.claude\""); err != nil {

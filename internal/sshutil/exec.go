@@ -55,8 +55,11 @@ func UploadDir(client *ssh.Client, localDir, remoteDir string, excludes []string
 	if err != nil {
 		return fmt.Errorf("resolve remote HOME: %w", err)
 	}
-	remoteDir = strings.Replace(remoteDir, "$HOME", remoteHome, 1)
-	remoteDir = strings.Replace(remoteDir, "~", remoteHome, 1)
+	if strings.HasPrefix(remoteDir, "$HOME") {
+		remoteDir = remoteHome + remoteDir[len("$HOME"):]
+	} else if strings.HasPrefix(remoteDir, "~") {
+		remoteDir = remoteHome + remoteDir[len("~"):]
+	}
 
 	// Build local tar command.
 	tarArgs := []string{"-cf", "-", "-C", localDir}
@@ -79,6 +82,7 @@ func UploadDir(client *ssh.Client, localDir, remoteDir string, excludes []string
 	session, err := client.NewSession()
 	if err != nil {
 		tarCmd.Process.Kill()
+		tarCmd.Wait()
 		return fmt.Errorf("new session: %w", err)
 	}
 	defer session.Close()
@@ -90,6 +94,7 @@ func UploadDir(client *ssh.Client, localDir, remoteDir string, excludes []string
 	remoteCmd := fmt.Sprintf("mkdir -p %s && tar -xf - -C %s", quoted, quoted)
 	if err := session.Run(remoteCmd); err != nil {
 		tarCmd.Process.Kill()
+		tarCmd.Wait()
 		return fmt.Errorf("remote extract: %w", err)
 	}
 
@@ -104,13 +109,18 @@ func UploadFile(client *ssh.Client, localPath, remotePath string) error {
 
 	// Resolve $HOME or ~ on the remote side before quoting, since
 	// ShellQuote uses single quotes which prevent variable expansion.
-	if strings.HasPrefix(remotePath, "$HOME/") || strings.HasPrefix(remotePath, "~/") {
+	if strings.HasPrefix(remotePath, "$HOME") {
 		resolved, err := RunCmd(client, "echo $HOME")
 		if err != nil {
 			return fmt.Errorf("resolve remote HOME: %w", err)
 		}
-		remotePath = strings.Replace(remotePath, "$HOME", resolved, 1)
-		remotePath = strings.Replace(remotePath, "~", resolved, 1)
+		remotePath = resolved + remotePath[len("$HOME"):]
+	} else if strings.HasPrefix(remotePath, "~") {
+		resolved, err := RunCmd(client, "echo $HOME")
+		if err != nil {
+			return fmt.Errorf("resolve remote HOME: %w", err)
+		}
+		remotePath = resolved + remotePath[len("~"):]
 	}
 
 	session, err := client.NewSession()

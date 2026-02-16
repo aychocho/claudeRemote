@@ -22,7 +22,7 @@ func findClaude(client *ssh.Client) (string, error) {
 			continue
 		}
 		// Verify the resolved path actually exists and is executable.
-		if _, err := sshutil.RunCmd(client, out+" --version 2>/dev/null"); err == nil {
+		if _, err := sshutil.RunCmd(client, sshutil.ShellQuote(out)+" --version 2>/dev/null"); err == nil {
 			return out, nil
 		}
 	}
