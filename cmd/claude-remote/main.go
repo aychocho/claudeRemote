@@ -19,9 +19,10 @@ func main() {
 	port := flag.String("p", "22", "SSH port")
 	claudeDir := flag.String("c", "", "Path to local .claude config directory (e.g. ~/.claude)")
 	apiKey := flag.String("k", "", "ANTHROPIC_API_KEY (or set $ANTHROPIC_API_KEY)")
+	skipPerms := flag.Bool("y", false, "Launch Claude Code with --dangerously-skip-permissions")
 	showVersion := flag.Bool("v", false, "Print version and exit")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: claudeRemote [-i keypath] [-p port] [-c claudedir] [-k apikey] user@host\n")
+		fmt.Fprintf(os.Stderr, "Usage: claudeRemote [-i keypath] [-p port] [-c claudedir] [-k apikey] [-y] user@host\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -86,7 +87,12 @@ func main() {
 		env = map[string]string{"ANTHROPIC_API_KEY": *apiKey}
 	}
 
-	sessionErr := terminal.InteractiveSession(client, sshutil.ShellQuote(claudePath), env)
+	cmd := sshutil.ShellQuote(claudePath)
+	if *skipPerms {
+		cmd += " --dangerously-skip-permissions"
+	}
+
+	sessionErr := terminal.InteractiveSession(client, cmd, env)
 
 	fmt.Fprintf(os.Stderr, "Cleaning up remote ~/.claude...\n")
 	if _, err := sshutil.RunCmd(client, "rm -rf \"$HOME/.claude\""); err != nil {

@@ -67,6 +67,7 @@ claudeRemote [options] user@host
 | `-p` | SSH port | `22` |
 | `-c` | Path to Claude credentials file | `~/.claude/.credentials.json` |
 | `-k` | Anthropic API key (alternative to credentials) | — |
+| `-y` | Launch Claude Code with `--dangerously-skip-permissions` | — |
 | `-v` | Print version and exit | — |
 
 ### Examples
@@ -80,6 +81,9 @@ claudeRemote -i ~/.ssh/id_ed25519 -p 2222 user@host
 
 # Use an API key instead of credentials file
 claudeRemote -k sk-ant-... user@host
+
+# Skip all permission prompts
+claudeRemote -y user@host
 ```
 
 ## Authentication
