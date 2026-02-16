@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 func Connect(addr, user, keyPath string) (*ssh.Client, error) {
@@ -27,9 +28,39 @@ func Connect(addr, user, keyPath string) (*ssh.Client, error) {
 		}
 	}
 
-	if len(authMethods) == 0 {
-		return nil, fmt.Errorf("no auth methods available (no SSH agent and no key provided)")
-	}
+	authMethods = append(authMethods, ssh.KeyboardInteractive(
+		func(name, instruction string, questions []string, echos []bool) ([]string, error) {
+			answers := make([]string, len(questions))
+			for i, q := range questions {
+				fmt.Fprintf(os.Stderr, "%s", q)
+				if echos[i] {
+					var line string
+					if _, err := fmt.Fscanln(os.Stdin, &line); err != nil {
+						return nil, err
+					}
+					answers[i] = line
+				} else {
+					pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+					fmt.Fprintln(os.Stderr)
+					if err != nil {
+						return nil, err
+					}
+					answers[i] = string(pw)
+				}
+			}
+			return answers, nil
+		},
+	))
+
+	authMethods = append(authMethods, ssh.PasswordCallback(func() (string, error) {
+		fmt.Fprintf(os.Stderr, "Password: ")
+		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return "", err
+		}
+		return string(pw), nil
+	}))
 
 	hostKeyCb, err := hostKeyCallback()
 	if err != nil {
@@ -84,7 +115,18 @@ func loadKey(path string) (ssh.AuthMethod, error) {
 
 	signer, err := ssh.ParsePrivateKey(data)
 	if err != nil {
-		return nil, fmt.Errorf("parse key: %w", err)
+		if err.Error() == "ssh: this private key is passphrase protected" {
+			fmt.Fprintf(os.Stderr, "Enter passphrase for key %s: ", path)
+			passphrase, readErr := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Fprintln(os.Stderr)
+			if readErr != nil {
+				return nil, fmt.Errorf("read passphrase: %w", readErr)
+			}
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(data, passphrase)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("parse key: %w", err)
+		}
 	}
 
 	return ssh.PublicKeys(signer), nil

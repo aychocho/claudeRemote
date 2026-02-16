@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
@@ -47,10 +48,69 @@ func ShellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
+// UploadDir tars a local directory and extracts it at remoteDir on the remote host.
+// excludes are passed as --exclude flags to tar.
+func UploadDir(client *ssh.Client, localDir, remoteDir string, excludes []string) error {
+	remoteHome, err := RunCmd(client, "echo $HOME")
+	if err != nil {
+		return fmt.Errorf("resolve remote HOME: %w", err)
+	}
+	remoteDir = strings.Replace(remoteDir, "$HOME", remoteHome, 1)
+	remoteDir = strings.Replace(remoteDir, "~", remoteHome, 1)
+
+	// Build local tar command.
+	tarArgs := []string{"-cf", "-", "-C", localDir}
+	for _, ex := range excludes {
+		tarArgs = append(tarArgs, "--exclude", ex)
+	}
+	tarArgs = append(tarArgs, ".")
+	tarCmd := exec.Command("tar", tarArgs...)
+
+	tarOut, err := tarCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("tar stdout pipe: %w", err)
+	}
+	tarCmd.Stderr = os.Stderr
+
+	if err := tarCmd.Start(); err != nil {
+		return fmt.Errorf("start local tar: %w", err)
+	}
+
+	session, err := client.NewSession()
+	if err != nil {
+		tarCmd.Process.Kill()
+		return fmt.Errorf("new session: %w", err)
+	}
+	defer session.Close()
+
+	session.Stdin = tarOut
+	session.Stderr = os.Stderr
+
+	quoted := ShellQuote(remoteDir)
+	remoteCmd := fmt.Sprintf("mkdir -p %s && tar -xf - -C %s", quoted, quoted)
+	if err := session.Run(remoteCmd); err != nil {
+		tarCmd.Process.Kill()
+		return fmt.Errorf("remote extract: %w", err)
+	}
+
+	return tarCmd.Wait()
+}
+
 func UploadFile(client *ssh.Client, localPath, remotePath string) error {
 	data, err := os.ReadFile(localPath)
 	if err != nil {
 		return fmt.Errorf("read local file: %w", err)
+	}
+
+	// Resolve $HOME or ~ on the remote side before quoting, since
+	// ShellQuote uses single quotes which prevent variable expansion.
+	if strings.HasPrefix(remotePath, "$HOME/") || strings.HasPrefix(remotePath, "~/") {
+		resolved, err := RunCmd(client, "echo $HOME")
+		if err != nil {
+			return fmt.Errorf("resolve remote HOME: %w", err)
+		}
+		remotePath = strings.Replace(remotePath, "$HOME", resolved, 1)
+		remotePath = strings.Replace(remotePath, "~", resolved, 1)
 	}
 
 	session, err := client.NewSession()

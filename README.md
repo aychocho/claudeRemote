@@ -96,3 +96,7 @@ claudeRemote -k sk-ant-... user@host
 - Go 1.21+
 - SSH access to the target machine
 - Claude credentials or API key
+
+## Acknowledgements
+
+Getting around mandatory onboarding was heavily inspired (basically borrowed) from this blog post. https://www.xugj520.cn/en/archives/claude-code-login-bypass-guide.html

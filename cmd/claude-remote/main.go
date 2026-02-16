@@ -16,11 +16,11 @@ var version = "dev"
 func main() {
 	keyPath := flag.String("i", "", "SSH private key path")
 	port := flag.String("p", "22", "SSH port")
-	credsPath := flag.String("c", "", "Path to Claude credentials file")
-	apiKey := flag.String("k", "", "ANTHROPIC_API_KEY (alternative to credentials file)")
+	claudeDir := flag.String("c", "", "Path to local .claude config directory (e.g. ~/.claude)")
+	apiKey := flag.String("k", "", "ANTHROPIC_API_KEY (or set $ANTHROPIC_API_KEY)")
 	showVersion := flag.Bool("v", false, "Print version and exit")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: claudeRemote [-i keypath] [-p port] [-c credspath] [-k apikey] user@host\n")
+		fmt.Fprintf(os.Stderr, "Usage: claudeRemote [-i keypath] [-p port] [-c claudedir] [-k apikey] user@host\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -42,13 +42,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *credsPath == "" {
+	// Pick up API key from environment if not passed via flag.
+	if *apiKey == "" {
+		*apiKey = os.Getenv("ANTHROPIC_API_KEY")
+	}
+
+	if *claudeDir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: cannot determine home directory: %v\n", err)
 			os.Exit(1)
 		}
-		*credsPath = home + "/.claude/.credentials.json"
+		*claudeDir = home + "/.claude"
 	}
 
 	addr := host + ":" + *port
@@ -63,7 +68,8 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "Connected.\n")
 
-	if err := provision.Run(client, *credsPath, *apiKey); err != nil {
+	claudePath, err := provision.Run(client, *claudeDir, *apiKey)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Provisioning failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -73,8 +79,17 @@ func main() {
 		env = map[string]string{"ANTHROPIC_API_KEY": *apiKey}
 	}
 
-	if err := terminal.InteractiveSession(client, "claude", env); err != nil {
-		fmt.Fprintf(os.Stderr, "Session error: %v\n", err)
+	sessionErr := terminal.InteractiveSession(client, claudePath, env)
+
+	fmt.Fprintf(os.Stderr, "Cleaning up remote ~/.claude...\n")
+	if _, err := sshutil.RunCmd(client, "rm -rf \"$HOME/.claude\""); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove remote ~/.claude: %v\n", err)
+	} else {
+		fmt.Fprintf(os.Stderr, "Remote ~/.claude removed.\n")
+	}
+
+	if sessionErr != nil {
+		fmt.Fprintf(os.Stderr, "Session error: %v\n", sessionErr)
 		os.Exit(1)
 	}
 }

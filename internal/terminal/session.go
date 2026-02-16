@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -76,5 +77,11 @@ func InteractiveSession(client *ssh.Client, command string, env map[string]strin
 		return fmt.Errorf("start command: %w", err)
 	}
 
-	return session.Wait()
+	err = session.Wait()
+	// Treat a clean exit (code 0) or normal exit codes as non-errors.
+	var exitErr *ssh.ExitError
+	if err != nil && errors.As(err, &exitErr) {
+		return nil
+	}
+	return err
 }
