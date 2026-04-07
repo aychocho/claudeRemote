@@ -54,7 +54,7 @@ func Run(client *ssh.Client, claudeDir, apiKey string) (string, error) {
 	claudePath, err := findClaude(client)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Claude Code not found, installing...\n")
-		if err := sshutil.RunCmdStream(client, "curl -fsSL https://claude.ai/install.sh | sh"); err != nil {
+		if err := sshutil.RunCmdStream(client, "curl -fsSL https://claude.ai/install.sh | bash"); err != nil {
 			return "", fmt.Errorf("install claude: %w", err)
 		}
 		claudePath, err = findClaude(client)

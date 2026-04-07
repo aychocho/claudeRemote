@@ -104,6 +104,11 @@ func agentAuthMethod() (ssh.AuthMethod, error) {
 	}
 
 	agentClient := agent.NewClient(conn)
+	// Verify the agent is alive; a stale socket will connect but fail on use.
+	if _, err := agentClient.List(); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("SSH agent not responding: %w", err)
+	}
 	return ssh.PublicKeysCallback(agentClient.Signers), nil
 }
 
