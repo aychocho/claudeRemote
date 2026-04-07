@@ -85,11 +85,68 @@ func hostKeyCallback() (ssh.HostKeyCallback, error) {
 	}
 
 	knownHostsFile := filepath.Join(home, ".ssh", "known_hosts")
+
+	// Create the file if it doesn't exist yet.
 	if _, err := os.Stat(knownHostsFile); err != nil {
-		return nil, fmt.Errorf("%s not found — run 'ssh-keyscan <host> >> %s' to add the host key first", knownHostsFile, knownHostsFile)
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(filepath.Dir(knownHostsFile), 0700); err != nil {
+				return nil, err
+			}
+			if err := os.WriteFile(knownHostsFile, nil, 0600); err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 
-	return knownhosts.New(knownHostsFile)
+	cb, err := knownhosts.New(knownHostsFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := cb(hostname, remote, key)
+		if err == nil {
+			return nil
+		}
+
+		// If the error is anything other than "key is unknown", reject.
+		var keyErr *knownhosts.KeyError
+		if !errors.As(err, &keyErr) || len(keyErr.Want) > 0 {
+			// len(Want) > 0 means the host exists but the key changed (MITM warning).
+			return err
+		}
+
+		// Prompt user to accept the unknown host key.
+		fmt.Fprintf(os.Stderr, "The authenticity of host '%s' can't be established.\n", hostname)
+		fmt.Fprintf(os.Stderr, "%s key fingerprint is %s.\n",
+			key.Type(), ssh.FingerprintSHA256(key))
+		fmt.Fprintf(os.Stderr, "Are you sure you want to continue connecting (yes/no)? ")
+
+		var answer string
+		if _, err := fmt.Fscanln(os.Stdin, &answer); err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+		if answer != "yes" {
+			return fmt.Errorf("host key verification rejected by user")
+		}
+
+		// Append the key to known_hosts.
+		line := knownhosts.Line([]string{knownhosts.Normalize(remote.String())}, key)
+		f, err := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			return fmt.Errorf("failed to open known_hosts: %w", err)
+		}
+		defer f.Close()
+		if _, err := fmt.Fprintln(f, line); err != nil {
+			return fmt.Errorf("failed to write known_hosts: %w", err)
+		}
+
+		fmt.Fprintf(os.Stderr, "Warning: Permanently added '%s' to the list of known hosts.\n",
+			knownhosts.Normalize(remote.String()))
+		return nil
+	}, nil
 }
 
 func agentAuthMethod() (ssh.AuthMethod, error) {
