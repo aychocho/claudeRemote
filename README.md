@@ -45,7 +45,7 @@ sudo mv claudeRemote /usr/local/bin/
 
 ### Build the .deb yourself
 
-Requires Go 1.24+ and [nfpm](https://nfpm.goreleaser.com/install/).
+Requires Go 1.24+ and [nfpm](https://nfpm.goreleaser.com/docs/install/).
 
 ```bash
 git clone https://github.com/aychocho/claudeRemote.git && cd claudeRemote
