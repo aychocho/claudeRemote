@@ -17,16 +17,27 @@ import (
 func Connect(addr, user, keyPath string) (*ssh.Client, error) {
 	var authMethods []ssh.AuthMethod
 
-	if am, err := agentAuthMethod(); err == nil {
-		authMethods = append(authMethods, am)
-	}
+	// Collect every public key (the explicit -i key first, then any agent keys)
+	// into a SINGLE publickey auth method. The x/crypto/ssh client dedups auth
+	// methods by name, so registering two separate "publickey" methods means only
+	// the first is ever attempted — an empty/unhelpful agent would then shadow the
+	// -i key and auth would fail even though the key is authorized.
+	var signers []ssh.Signer
 
 	if keyPath != "" {
-		if am, err := loadKey(keyPath); err == nil {
-			authMethods = append(authMethods, am)
+		if s, err := loadKeySigner(keyPath); err == nil {
+			signers = append(signers, s)
 		} else {
 			fmt.Fprintf(os.Stderr, "Warning: could not load key %s: %v\n", keyPath, err)
 		}
+	}
+
+	if agentSigs, err := agentSigners(); err == nil {
+		signers = append(signers, agentSigs...)
+	}
+
+	if len(signers) > 0 {
+		authMethods = append(authMethods, ssh.PublicKeys(signers...))
 	}
 
 	authMethods = append(authMethods, ssh.KeyboardInteractive(
@@ -149,7 +160,7 @@ func hostKeyCallback() (ssh.HostKeyCallback, error) {
 	}, nil
 }
 
-func agentAuthMethod() (ssh.AuthMethod, error) {
+func agentSigners() ([]ssh.Signer, error) {
 	sock := os.Getenv("SSH_AUTH_SOCK")
 	if sock == "" {
 		return nil, fmt.Errorf("SSH_AUTH_SOCK not set")
@@ -160,16 +171,19 @@ func agentAuthMethod() (ssh.AuthMethod, error) {
 		return nil, fmt.Errorf("cannot connect to SSH agent: %w", err)
 	}
 
+	// The connection is intentionally left open: the returned signers sign via
+	// the agent during authentication and need it alive. It is reclaimed when the
+	// process exits (this is a short-lived CLI).
 	agentClient := agent.NewClient(conn)
-	// Verify the agent is alive; a stale socket will connect but fail on use.
-	if _, err := agentClient.List(); err != nil {
+	signers, err := agentClient.Signers()
+	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("SSH agent not responding: %w", err)
 	}
-	return ssh.PublicKeysCallback(agentClient.Signers), nil
+	return signers, nil
 }
 
-func loadKey(path string) (ssh.AuthMethod, error) {
+func loadKeySigner(path string) (ssh.Signer, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read key: %w", err)
@@ -192,5 +206,5 @@ func loadKey(path string) (ssh.AuthMethod, error) {
 		}
 	}
 
-	return ssh.PublicKeys(signer), nil
+	return signer, nil
 }
